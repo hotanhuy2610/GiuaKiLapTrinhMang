@@ -56,12 +56,29 @@ public class ThemeManager {
         public static final Color ONLINE_GREEN = new Color(49, 162, 76);  // #31A24C
     }
 
+    private static boolean lastIsDarkState = isDark();
+
+    static {
+        // Automatically check for time changes every 10 seconds in AUTO_TIME mode
+        javax.swing.Timer autoCheckTimer = new javax.swing.Timer(10000, e -> {
+            if (currentMode == ThemeMode.AUTO_TIME) {
+                boolean newDark = isDark();
+                if (newDark != lastIsDarkState) {
+                    lastIsDarkState = newDark;
+                    notifyListeners();
+                }
+            }
+        });
+        autoCheckTimer.start();
+    }
+
     public static ThemeMode getThemeMode() {
         return currentMode;
     }
 
     public static void setThemeMode(ThemeMode mode) {
         currentMode = mode;
+        lastIsDarkState = isDark();
         notifyListeners();
     }
 
