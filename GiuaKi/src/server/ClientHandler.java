@@ -104,74 +104,30 @@ public class ClientHandler extends Thread {
 
 
                 if (type.equals("MESSAGE")) {
+                    String target = is.readUTF();
+                    String message = is.readUTF();
+                    System.out.println(username + " -> " + target + ": " + message);
 
-                    String target =
-                            is.readUTF();
+                    ClientHandler receiver = server.getClient(target);
+                    if (receiver == null) {
+                        sendError(target + " hien khong online.");
+                    } else {
+                        receiver.sendMessage(username, message);
+                    }
+                } else if (type.equals("FILE")) {
+                    String target = is.readUTF();
+                    String fileName = is.readUTF();
+                    int fileSize = is.readInt();
+                    byte[] data = new byte[fileSize];
+                    is.readFully(data);
+                    System.out.println(username + " gui file " + fileName + " -> " + target);
 
-
-                    String message =
-                            is.readUTF();
-
-
-                    System.out.println(
-                            username
-                                    + " -> "
-                                    + target
-                                    + ": "
-                                    + message
-                    );
-
-
-                    server
-                            .getMessageService()
-                            .sendPrivateMessage(
-                                    this,
-                                    target,
-                                    message
-                            );
-                }
-
-
-                else if (type.equals("FILE")) {
-
-                    String target =
-                            is.readUTF();
-
-
-                    String fileName =
-                            is.readUTF();
-
-
-                    int fileSize =
-                            is.readInt();
-
-
-                    byte[] data =
-                            new byte[fileSize];
-
-
-                    is.readFully(
-                            data
-                    );
-
-
-                    System.out.println(
-                            username
-                                    + " gui file "
-                                    + fileName
-                                    + " -> "
-                                    + target
-                    );
-
-
-                    server
-                            .getFileTransferService()
-                            .sendPrivateFile(
-                                    this,
-                                    target,
-                                    fileName,
-                                    data
-                            );
+                    ClientHandler receiver = server.getClient(target);
+                    if (receiver == null) {
+                        sendError(target + " hien khong online.");
+                    } else {
+                        receiver.sendFile(username, fileName, data);
+                    }
                 }
             }
 

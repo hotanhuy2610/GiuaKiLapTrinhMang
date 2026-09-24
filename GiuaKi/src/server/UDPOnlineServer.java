@@ -25,25 +25,8 @@ public class UDPOnlineServer {
             new ConcurrentHashMap<>();
 
 
-    // Xử lý chức năng đang soạn
-    private final TypingService typingService;
-
-
-    // =====================================================
-    // CONSTRUCTOR
-    // =====================================================
-
-    public UDPOnlineServer(
-            int port) {
-
-        this.port =
-                port;
-
-
-        typingService =
-                new TypingService(
-                        this
-                );
+    public UDPOnlineServer(int port) {
+        this.port = port;
     }
 
 
@@ -174,11 +157,7 @@ public class UDPOnlineServer {
                                 );
 
 
-                typingService.handleTyping(
-                        sender,
-                        target,
-                        typing
-                );
+                sendToUser(target, "TYPING|" + sender + "|" + (typing ? "1" : "0"));
             }
 
 

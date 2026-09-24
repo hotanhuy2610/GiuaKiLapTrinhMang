@@ -29,20 +29,6 @@ public class TCPServer {
             new ConcurrentHashMap<>();
 
 
-    // =====================================================
-    // SERVICES
-    // =====================================================
-
-    private final PrivateMessageService messageService =
-            new PrivateMessageService(
-                    this
-            );
-
-
-    private final FileTransferService fileTransferService =
-            new FileTransferService(
-                    this
-            );
 
 
     // =====================================================
@@ -271,24 +257,6 @@ public class TCPServer {
     }
 
 
-    // =====================================================
-    // MESSAGE SERVICE
-    // =====================================================
-
-    public PrivateMessageService getMessageService() {
-
-        return messageService;
-    }
-
-
-    // =====================================================
-    // FILE SERVICE
-    // =====================================================
-
-    public FileTransferService getFileTransferService() {
-
-        return fileTransferService;
-    }
 
 
     // =====================================================

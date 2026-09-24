@@ -60,15 +60,34 @@ public class ClientConnection {
 
         os.flush();
 
+        Thread receiveThread = new Thread(this::listen);
+        receiveThread.setDaemon(true);
+        receiveThread.start();
+    }
 
-        ClientReceiver receiver =
-                new ClientReceiver(
-                        is,
-                        client
-                );
-
-
-        receiver.start();
+    private void listen() {
+        try {
+            while (true) {
+                String type = is.readUTF();
+                if ("MESSAGE".equals(type)) {
+                    String sender = is.readUTF();
+                    String message = is.readUTF();
+                    client.receiveMessage(sender, message);
+                } else if ("FILE".equals(type)) {
+                    String sender = is.readUTF();
+                    String fileName = is.readUTF();
+                    int size = is.readInt();
+                    byte[] data = new byte[size];
+                    is.readFully(data);
+                    client.receiveFile(sender, fileName, data);
+                } else if ("ERROR".equals(type)) {
+                    String message = is.readUTF();
+                    client.receiveError(message);
+                }
+            }
+        } catch (IOException e) {
+            client.serverDisconnected();
+        }
     }
 
 

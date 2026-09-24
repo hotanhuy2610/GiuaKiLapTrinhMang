@@ -4,1740 +4,636 @@ import client.TCPClient;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
-
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
-
 import java.awt.*;
-
+import java.awt.geom.Ellipse2D;
+import java.awt.geom.RoundRectangle2D;
 import java.io.File;
 import java.io.IOException;
-
 import java.nio.file.Files;
-
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
-
 import java.util.HashMap;
 import java.util.Map;
 
-
-public class ChatPanel
-        extends JPanel {
+public class ChatPanel extends JPanel {
 
     private final TCPClient controller;
-
-
-    // =====================================================
-    // HEADER
-    // =====================================================
-
-    private final JLabel lblChatTitle =
-            new JLabel(
-                    ""
-            );
-
-
-    // =====================================================
-    // TYPING
-    // =====================================================
-
-    private final TypingIndicator typingIndicator =
-            new TypingIndicator();
-
-
-    // =====================================================
-    // CHAT
-    // =====================================================
-
+    private final JLabel lblChatTitle = new JLabel("");
+    private final JLabel lblSubStatus = new JLabel("");
+    private final JLabel lblEmpty = new JLabel("Chọn một cuộc trò chuyện để bắt đầu");
+    private final JPanel avatarHeader = new JPanel();
+    private final TypingIndicator typingIndicator = new TypingIndicator();
+    private final JPanel headerPanel;
+    private final JPanel bottomContainer;
+    private final JPanel bottomInputRow;
+    private final JPanel emptyChatPanel;
+    private final JButton btnFile;
+    private final JButton btnSend;
     private JScrollPane chatScrollPane;
-
-    private JTextField txtMessage;
-
-
-    // Mỗi user có 1 lịch sử riêng
-    private final Map<String, JPanel> conversations =
-            new HashMap<>();
-
-
+    private DarkRoundedTextField txtMessage;
+    private final Map<String, JPanel> conversations = new HashMap<>();
     private String selectedUser;
+    private final DateTimeFormatter timeFormat = DateTimeFormatter.ofPattern("HH:mm");
 
+    public ChatPanel(TCPClient controller) {
+        this.controller = controller;
 
-    // =====================================================
-    // TIME
-    // =====================================================
+        setLayout(new BorderLayout());
+        setBackground(ThemeManager.getChatBg());
 
-    private final DateTimeFormatter timeFormat =
-            DateTimeFormatter.ofPattern(
-                    "HH:mm"
-            );
+        ThemeManager.addThemeChangeListener(this::applyTheme);
 
-
-    // =====================================================
-    // CONSTRUCTOR
-    // =====================================================
-
-    public ChatPanel(
-            TCPClient controller) {
-
-        this.controller =
-                controller;
-
-
-        setLayout(
-                new BorderLayout()
-        );
-
-
-        setBackground(
-                Color.WHITE
-        );
-
-
-        createHeader();
-
+        headerPanel = createHeaderPanel();
+        emptyChatPanel = createEmptyChatPanel();
         createChatScroll();
+        
+        bottomContainer = new JPanel();
+        bottomInputRow = new JPanel(new BorderLayout(10, 0));
+        btnFile = createIconButton(UIIcons.createAttachIcon(24, ThemeManager.getAccent()), "Đính kèm file");
+        btnSend = createIconButton(UIIcons.createSendIcon(24, ThemeManager.getAccent()), "Gửi tin nhắn");
 
         createInputArea();
+
+        // Hide header and bottom input bar until a user is selected
+        headerPanel.setVisible(false);
+        bottomContainer.setVisible(false);
     }
 
+    private JPanel createHeaderPanel() {
+        JPanel header = new JPanel(new BorderLayout(12, 0));
+        header.setBackground(ThemeManager.getHeaderBg());
+        header.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(0, 0, 1, 0, ThemeManager.getBorderColor()),
+                new EmptyBorder(10, 20, 10, 20)
+        ));
 
-    // =====================================================
-    // HEADER
-    // =====================================================
+        // Left Header: Avatar + Name + Status
+        JPanel leftHeader = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 0));
+        leftHeader.setOpaque(false);
 
-    private void createHeader() {
+        avatarHeader.setOpaque(false);
+        avatarHeader.setPreferredSize(new Dimension(40, 40));
 
-        JPanel header =
-                new JPanel(
-                        new BorderLayout()
-                );
+        JPanel titleBox = new JPanel(new GridLayout(2, 1, 0, 2));
+        titleBox.setOpaque(false);
 
+        lblChatTitle.setFont(new Font("Segoe UI", Font.BOLD, 17));
+        lblChatTitle.setForeground(ThemeManager.getTextPrimary());
 
-        header.setBackground(
-                Color.WHITE
-        );
+        lblSubStatus.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        lblSubStatus.setForeground(ThemeManager.getTextSecondary());
 
+        titleBox.add(lblChatTitle);
+        titleBox.add(lblSubStatus);
 
-        header.setBorder(
-                new EmptyBorder(
-                        14,
-                        20,
-                        14,
-                        20
-                )
-        );
+        leftHeader.add(avatarHeader);
+        leftHeader.add(titleBox);
+        header.add(leftHeader, BorderLayout.WEST);
 
+        // Right Header: Phone / Video / Info Icons
+        JPanel rightHeader = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        rightHeader.setOpaque(false);
 
-        lblChatTitle.setFont(
-                new Font(
-                        "Arial",
-                        Font.BOLD,
-                        19
-                )
-        );
+        JButton btnCall = createIconButton(UIIcons.createPhoneIcon(22, ThemeManager.getAccent()), "Bắt đầu cuộc gọi");
+        JButton btnVideo = createIconButton(UIIcons.createVideoIcon(22, ThemeManager.getAccent()), "Bắt đầu gọi Video");
+        JButton btnInfo = createIconButton(UIIcons.createInfoIcon(22, ThemeManager.getAccent()), "Thông tin cuộc trò chuyện");
 
+        rightHeader.add(btnCall);
+        rightHeader.add(btnVideo);
+        rightHeader.add(btnInfo);
+        header.add(rightHeader, BorderLayout.EAST);
 
-        header.add(
-                lblChatTitle,
-                BorderLayout.WEST
-        );
-
-
-        add(
-                header,
-                BorderLayout.NORTH
-        );
+        add(header, BorderLayout.NORTH);
+        return header;
     }
-
-
-    // =====================================================
-    // CHAT SCROLL
-    // =====================================================
 
     private void createChatScroll() {
+        chatScrollPane = new JScrollPane(emptyChatPanel);
+        chatScrollPane.setOpaque(true);
+        chatScrollPane.setBackground(ThemeManager.getChatBg());
+        chatScrollPane.getViewport().setOpaque(true);
+        chatScrollPane.getViewport().setBackground(ThemeManager.getChatBg());
+        chatScrollPane.setBorder(null);
+        chatScrollPane.getVerticalScrollBar().setUnitIncrement(16);
 
-        chatScrollPane =
-                new JScrollPane(
-                        createEmptyChatPanel()
-                );
-
-
-        chatScrollPane.setBorder(
-                null
-        );
-
-
-        chatScrollPane
-                .getVerticalScrollBar()
-                .setUnitIncrement(
-                        16
-                );
-
-
-        add(
-                chatScrollPane,
-                BorderLayout.CENTER
-        );
+        add(chatScrollPane, BorderLayout.CENTER);
     }
 
-
-    // =====================================================
-    // INPUT AREA
-    // =====================================================
+    private final JPanel typingRow = new JPanel(new BorderLayout());
 
     private void createInputArea() {
-
-        // =========================================
-        // CONTAINER
-        //
-        // Dòng 1: Nam đang soạn tin...
-        // Dòng 2: file + input + send
-        // =========================================
-
-        JPanel bottomContainer =
-                new JPanel();
-
-
-        bottomContainer.setLayout(
-                new BoxLayout(
-                        bottomContainer,
-                        BoxLayout.Y_AXIS
-                )
-        );
-
-
-        bottomContainer.setBackground(
-                Color.WHITE
-        );
-
-
-        // =================================================
-        // TYPING ROW
-        // =================================================
-
-        JPanel typingRow =
-                new JPanel(
-                        new BorderLayout()
-                );
-
-
-        typingRow.setBackground(
-                Color.WHITE
-        );
-
-
-        typingRow.setBorder(
-                new EmptyBorder(
-                        0,
-                        62,
-                        3,
-                        10
-                )
-        );
-
-
-        typingRow.setAlignmentX(
-                Component.LEFT_ALIGNMENT
-        );
-
-
-        typingIndicator.setAlignmentX(
-                Component.LEFT_ALIGNMENT
-        );
-
-
-        typingRow.add(
-                typingIndicator,
-                BorderLayout.WEST
-        );
-
-
-        // =================================================
-        // INPUT ROW
-        // =================================================
-
-        JPanel bottom =
-                new JPanel(
-                        new BorderLayout(
-                                8,
-                                0
-                        )
-                );
-
-
-        bottom.setBackground(
-                Color.WHITE
-        );
-
-
-        bottom.setBorder(
-                new EmptyBorder(
-                        5,
-                        12,
-                        10,
-                        12
-                )
-        );
-
-
-        bottom.setAlignmentX(
-                Component.LEFT_ALIGNMENT
-        );
-
-
-        // =================================================
-        // FILE
-        // =================================================
-
-        JButton btnFile =
-                createIconButton(
-                        "/icons/file-icon.png",
-                        "File"
-                );
-
-
-        // =================================================
-        // MESSAGE INPUT
-        // =================================================
-
-        txtMessage =
-                new RoundedTextField(
-                        28,
-                        "Nhập tin nhắn..."
-                );
-
-
-        txtMessage.setFont(
-                new Font(
-                        "Arial",
-                        Font.PLAIN,
-                        15
-                )
-        );
-
-
-        txtMessage.setBorder(
-                new EmptyBorder(
-                        9,
-                        16,
-                        9,
-                        16
-                )
-        );
-
-
-        txtMessage.setPreferredSize(
-                new Dimension(
-                        100,
-                        44
-                )
-        );
-
-
-        txtMessage.setEnabled(
-                false
-        );
-
-
-        // =================================================
-        // SEND
-        // =================================================
-
-        JButton btnSend =
-                createIconButton(
-                        "/icons/send-icon.png",
-                        "Gửi"
-                );
-
-
-        bottom.add(
-                btnFile,
-                BorderLayout.WEST
-        );
-
-
-        bottom.add(
-                txtMessage,
-                BorderLayout.CENTER
-        );
-
-
-        bottom.add(
-                btnSend,
-                BorderLayout.EAST
-        );
-
-
-        // =========================================
-        // GHÉP 2 DÒNG
-        // =========================================
-
-        bottomContainer.add(
-                typingRow
-        );
-
-
-        bottomContainer.add(
-                bottom
-        );
-
-
-        add(
-                bottomContainer,
-                BorderLayout.SOUTH
-        );
-
-
-        // =================================================
-        // EVENTS
-        // =================================================
-
-        btnSend.addActionListener(
-                e ->
-                        controller.sendMessage()
-        );
-
-
-        txtMessage.addActionListener(
-                e ->
-                        controller.sendMessage()
-        );
-
-
-        btnFile.addActionListener(
-                e ->
-                        controller.chooseFile()
-        );
-
-
-        // =================================================
-        // PHÁT HIỆN USER ĐANG GÕ
-        // =================================================
-
-        txtMessage
-                .getDocument()
-                .addDocumentListener(
-                        new DocumentListener() {
-
-                            @Override
-                            public void insertUpdate(
-                                    DocumentEvent e) {
-
-                                notifyTyping();
-                            }
-
-
-                            @Override
-                            public void removeUpdate(
-                                    DocumentEvent e) {
-
-                                notifyTyping();
-                            }
-
-
-                            @Override
-                            public void changedUpdate(
-                                    DocumentEvent e) {
-
-                                notifyTyping();
-                            }
-                        }
-                );
+        bottomContainer.setLayout(new BoxLayout(bottomContainer, BoxLayout.Y_AXIS));
+        bottomContainer.setBackground(ThemeManager.getHeaderBg());
+        bottomContainer.setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, ThemeManager.getBorderColor()));
+
+        // Typing Row
+        typingRow.setOpaque(false);
+        typingRow.setBorder(new EmptyBorder(4, 20, 2, 20));
+        typingIndicator.setAlignmentX(Component.LEFT_ALIGNMENT);
+        typingRow.add(typingIndicator, BorderLayout.WEST);
+
+        // Input Row
+        bottomInputRow.setBackground(ThemeManager.getHeaderBg());
+        bottomInputRow.setBorder(new EmptyBorder(8, 16, 12, 16));
+
+        txtMessage = new DarkRoundedTextField("Aa");
+        txtMessage.setEnabled(false);
+
+        bottomInputRow.add(btnFile, BorderLayout.WEST);
+        bottomInputRow.add(txtMessage, BorderLayout.CENTER);
+        bottomInputRow.add(btnSend, BorderLayout.EAST);
+
+        bottomContainer.add(typingRow);
+        bottomContainer.add(bottomInputRow);
+        add(bottomContainer, BorderLayout.SOUTH);
+
+        btnSend.addActionListener(e -> controller.sendMessage());
+        txtMessage.addActionListener(e -> controller.sendMessage());
+        btnFile.addActionListener(e -> controller.chooseFile());
+
+        txtMessage.getDocument().addDocumentListener(new DocumentListener() {
+            @Override public void insertUpdate(DocumentEvent e) { notifyTyping(); }
+            @Override public void removeUpdate(DocumentEvent e) { notifyTyping(); }
+            @Override public void changedUpdate(DocumentEvent e) { notifyTyping(); }
+        });
     }
 
-
-    // =====================================================
-    // THÔNG BÁO ĐANG GÕ
-    // =====================================================
+    private JButton createIconButton(Icon icon, String tooltip) {
+        JButton btn = new JButton(icon) {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                if (getModel().isRollover()) {
+                    g2.setColor(ThemeManager.getHoverBg());
+                    g2.fill(new Ellipse2D.Float(0, 0, getWidth(), getHeight()));
+                }
+                g2.dispose();
+                super.paintComponent(g);
+            }
+        };
+        btn.setToolTipText(tooltip);
+        btn.setFocusPainted(false);
+        btn.setContentAreaFilled(false);
+        btn.setBorder(null);
+        btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        btn.setPreferredSize(new Dimension(38, 38));
+        return btn;
+    }
 
     private void notifyTyping() {
-
-        controller.typingChanged(
-                selectedUser,
-                txtMessage.getText()
-        );
+        controller.typingChanged(selectedUser, txtMessage.getText());
     }
 
-
-    // =====================================================
-    // NHẬN TYPING TỪ UDP
-    // =====================================================
-
-    public void showTyping(
-            String sender,
-            boolean typing) {
-
-        SwingUtilities.invokeLater(
-                () -> {
-
-                    // Chỉ hiện nếu đang mở cuộc chat
-                    // với đúng người đang gõ
-                    if (selectedUser == null) {
-
-                        return;
-                    }
-
-
-                    if (!selectedUser.equals(
-                            sender
-                    )) {
-
-                        return;
-                    }
-
-
-                    if (typing) {
-
-                        typingIndicator.showTyping(
-                                sender
-                        );
-
-                    } else {
-
-                        typingIndicator.hideTyping();
-                    }
-                }
-        );
+    public void showTyping(String sender, boolean typing) {
+        SwingUtilities.invokeLater(() -> {
+            if (selectedUser == null || !selectedUser.equals(sender)) return;
+            if (typing) {
+                typingIndicator.showTyping(sender);
+            } else {
+                typingIndicator.hideTyping();
+            }
+            bottomContainer.revalidate();
+            bottomContainer.repaint();
+        });
     }
-
-
-    // =====================================================
-    // EMPTY CHAT
-    // =====================================================
 
     private JPanel createEmptyChatPanel() {
+        JPanel panel = new JPanel(new GridBagLayout());
+        panel.setOpaque(true);
+        panel.setBackground(ThemeManager.getChatBg());
 
-        JPanel panel =
-                new JPanel();
+        JPanel box = new JPanel();
+        box.setLayout(new BoxLayout(box, BoxLayout.Y_AXIS));
+        box.setOpaque(false);
 
+        // Large Messenger Badge Icon
+        JPanel iconCircle = new JPanel() {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
-        panel.setBackground(
-                Color.WHITE
-        );
+                GradientPaint gp = new GradientPaint(0, 0, new Color(0, 198, 255), getWidth(), getHeight(), new Color(0, 114, 255));
+                g2.setPaint(gp);
+                g2.fillOval(0, 0, 72, 72);
 
+                g2.setColor(Color.WHITE);
+                g2.fillRoundRect(18, 20, 36, 26, 12, 12);
+                int[] px = {22, 32, 26};
+                int[] py = {42, 42, 50};
+                g2.fillPolygon(px, py, 3);
 
+                g2.setColor(new Color(0, 114, 255));
+                g2.setStroke(new BasicStroke(2.8f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+                g2.drawLine(30, 26, 39, 32);
+                g2.drawLine(39, 32, 33, 34);
+                g2.drawLine(33, 34, 41, 40);
+
+                g2.dispose();
+            }
+        };
+        iconCircle.setPreferredSize(new Dimension(72, 72));
+        iconCircle.setMaximumSize(new Dimension(72, 72));
+        iconCircle.setAlignmentX(Component.CENTER_ALIGNMENT);
+        iconCircle.setOpaque(false);
+
+        JLabel title = new JLabel("Messenger cho Desktop");
+        title.setFont(new Font("Segoe UI", Font.BOLD, 18));
+        title.setForeground(ThemeManager.getTextPrimary());
+        title.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        lblEmpty.setText("Chọn một cuộc trò chuyện từ danh sách bên trái để bắt đầu nhắn tin");
+        lblEmpty.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        lblEmpty.setForeground(ThemeManager.getTextSecondary());
+        lblEmpty.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        box.add(iconCircle);
+        box.add(Box.createVerticalStrut(14));
+        box.add(title);
+        box.add(Box.createVerticalStrut(6));
+        box.add(lblEmpty);
+
+        panel.add(box);
         return panel;
     }
 
-
-    // =====================================================
-    // OPEN CONVERSATION
-    // =====================================================
-
-    public void openConversation(
-            String user) {
-
-        // Nếu đang gõ cho người cũ
-        if (selectedUser != null
-                && !selectedUser.equals(
-                user
-        )) {
-
-            controller.typingChanged(
-                    selectedUser,
-                    ""
-            );
-
-
-            txtMessage.setText(
-                    ""
-            );
+    public void openConversation(String user) {
+        if (selectedUser != null && !selectedUser.equals(user)) {
+            controller.typingChanged(selectedUser, "");
+            txtMessage.setText("");
         }
 
+        selectedUser = user;
+        lblChatTitle.setText(user);
+        lblSubStatus.setText("Đang hoạt động");
 
-        selectedUser =
-                user;
+        // Show header & input bar when user is selected
+        headerPanel.setVisible(true);
+        bottomContainer.setVisible(true);
+        revalidate();
+        repaint();
 
+        // Header avatar
+        avatarHeader.removeAll();
+        JPanel avatarCircle = new JPanel() {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(ThemeManager.getAccent());
+                g2.fill(new Ellipse2D.Float(0, 0, 40, 40));
+                g2.setColor(Color.WHITE);
+                g2.setFont(new Font("Segoe UI", Font.BOLD, 17));
+                String initial = user.isEmpty() ? "?" : user.substring(0, 1).toUpperCase();
+                FontMetrics fm = g2.getFontMetrics();
+                int tx = (40 - fm.stringWidth(initial)) / 2;
+                int ty = ((40 - fm.getHeight()) / 2) + fm.getAscent();
+                g2.drawString(initial, tx, ty);
+                g2.dispose();
+            }
+        };
+        avatarCircle.setOpaque(false);
+        avatarCircle.setPreferredSize(new Dimension(40, 40));
+        avatarHeader.add(avatarCircle);
+        avatarHeader.revalidate();
+        avatarHeader.repaint();
 
-        lblChatTitle.setText(
-                user
-        );
-
-
-        // Khi chuyển cuộc trò chuyện
-        // ẩn typing cũ
         typingIndicator.hideTyping();
-
-
-        txtMessage.setEnabled(
-                true
-        );
-
-
+        txtMessage.setEnabled(true);
         txtMessage.requestFocusInWindow();
 
-
-        chatScrollPane.setViewportView(
-                getConversationPanel(
-                        user
-                )
-        );
-
-
+        chatScrollPane.setViewportView(getConversationPanel(user));
         scrollToBottom();
     }
 
-
-    // =====================================================
-    // CLOSE CONVERSATION
-    // =====================================================
-
     public void closeConversation() {
-
         if (selectedUser != null) {
-
-            controller.typingChanged(
-                    selectedUser,
-                    ""
-            );
+            controller.typingChanged(selectedUser, "");
         }
-
-
-        selectedUser =
-                null;
-
-
-        lblChatTitle.setText(
-                ""
-        );
-
-
-        txtMessage.setEnabled(
-                false
-        );
-
-
-        txtMessage.setText(
-                ""
-        );
-
-
+        selectedUser = null;
+        lblChatTitle.setText("");
+        lblSubStatus.setText("");
+        avatarHeader.removeAll();
+        txtMessage.setEnabled(false);
+        txtMessage.setText("");
         typingIndicator.hideTyping();
 
-
-        chatScrollPane.setViewportView(
-                createEmptyChatPanel()
-        );
+        headerPanel.setVisible(false);
+        bottomContainer.setVisible(false);
+        chatScrollPane.setViewportView(emptyChatPanel);
+        revalidate();
+        repaint();
     }
 
-
-    // =====================================================
-    // LỊCH SỬ CHAT RIÊNG
-    // =====================================================
-
-    private JPanel getConversationPanel(
-            String user) {
-
-        return conversations.computeIfAbsent(
-                user,
-
-                key -> {
-
-                    JPanel panel =
-                            new JPanel();
-
-
-                    panel.setLayout(
-                            new BoxLayout(
-                                    panel,
-                                    BoxLayout.Y_AXIS
-                            )
-                    );
-
-
-                    panel.setBackground(
-                            Color.WHITE
-                    );
-
-
-                    panel.setBorder(
-                            new EmptyBorder(
-                                    10,
-                                    5,
-                                    10,
-                                    5
-                            )
-                    );
-
-
-                    return panel;
-                }
-        );
+    private JPanel getConversationPanel(String user) {
+        return conversations.computeIfAbsent(user, key -> {
+            JPanel panel = new JPanel();
+            panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+            panel.setOpaque(true);
+            panel.setBackground(ThemeManager.getChatBg());
+            panel.setBorder(new EmptyBorder(16, 16, 16, 16));
+            return panel;
+        });
     }
 
-
-    // =====================================================
-    // GET
-    // =====================================================
-
-    public String getSelectedUser() {
-
-        return selectedUser;
-    }
-
-
-    public String getMessage() {
-
-        return txtMessage
-                .getText()
-                .trim();
-    }
-
-
-    public void clearMessage() {
-
-        txtMessage.setText(
-                ""
-        );
-    }
-
-
-    // =====================================================
-    // CHỌN FILE
-    // =====================================================
+    public String getSelectedUser() { return selectedUser; }
+    public String getMessage() { return txtMessage.getText().trim(); }
+    public void clearMessage() { txtMessage.setText(""); }
 
     public File chooseFile() {
-
-        JFileChooser chooser =
-                new JFileChooser();
-
-
-        if (chooser.showOpenDialog(
-                this
-        ) == JFileChooser.APPROVE_OPTION) {
-
-            return chooser
-                    .getSelectedFile();
+        JFileChooser chooser = new JFileChooser();
+        if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+            return chooser.getSelectedFile();
         }
-
-
         return null;
     }
 
-
-    // =====================================================
-    // MY MESSAGE
-    // =====================================================
-
-    public void showMyMessage(
-            String target,
-            String message) {
-
-        addMessage(
-                target,
-                message,
-                true
-        );
+    public void showMyMessage(String target, String message) {
+        addMessage(target, message, true);
     }
 
-
-    // =====================================================
-    // OTHER MESSAGE
-    // =====================================================
-
-    public void showOtherMessage(
-            String sender,
-            String message) {
-
-        if (sender.equals(
-                selectedUser
-        )) {
-
+    public void showOtherMessage(String sender, String message) {
+        if (sender.equals(selectedUser)) {
             typingIndicator.hideTyping();
         }
-
-
-        addMessage(
-                sender,
-                message,
-                false
-        );
+        addMessage(sender, message, false);
     }
 
+    private void addMessage(String conversationUser, String message, boolean mine) {
+        SwingUtilities.invokeLater(() -> {
+            JPanel chatPanel = getConversationPanel(conversationUser);
 
-    // =====================================================
-    // ADD MESSAGE
-    // =====================================================
+            JPanel row = new JPanel(new BorderLayout());
+            row.setOpaque(false);
+            row.setBorder(new EmptyBorder(4, 0, 4, 0));
 
-    private void addMessage(
-            String conversationUser,
-            String message,
-            boolean mine) {
+            Color bubbleBg = mine ? ThemeManager.getMyBubble() : ThemeManager.getOtherBubble();
+            RoundedPanel bubble = new RoundedPanel(18, bubbleBg);
+            bubble.setLayout(new BorderLayout());
 
-        SwingUtilities.invokeLater(
-                () -> {
+            JLabel text = new JLabel();
+            text.setFont(new Font("Segoe UI", Font.PLAIN, 15));
+            text.setForeground(mine ? Color.WHITE : ThemeManager.getTextPrimary());
+            text.setBorder(new EmptyBorder(8, 14, 8, 14));
 
-                    JPanel chatPanel =
-                            getConversationPanel(
-                                    conversationUser
-                            );
+            FontMetrics fm = text.getFontMetrics(text.getFont());
+            int stringWidth = fm.stringWidth(message);
 
+            if (stringWidth > 360) {
+                text.setText("<html><body style='width: 360px; word-wrap: break-word;'>" + escapeHtml(message) + "</body></html>");
+            } else {
+                text.setText(escapeHtml(message));
+            }
 
-                    JPanel row =
-                            new JPanel(
-                                    new BorderLayout()
-                            );
+            bubble.add(text, BorderLayout.CENTER);
 
+            JLabel lblTime = new JLabel(LocalTime.now().format(timeFormat));
+            lblTime.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+            lblTime.setForeground(ThemeManager.getTextSecondary());
 
-                    row.setOpaque(
-                            false
-                    );
+            JPanel messageArea = new JPanel();
+            messageArea.setLayout(new BoxLayout(messageArea, BoxLayout.Y_AXIS));
+            messageArea.setOpaque(false);
 
+            if (mine) {
+                bubble.setAlignmentX(Component.RIGHT_ALIGNMENT);
+                lblTime.setAlignmentX(Component.RIGHT_ALIGNMENT);
+            } else {
+                bubble.setAlignmentX(Component.LEFT_ALIGNMENT);
+                lblTime.setAlignmentX(Component.LEFT_ALIGNMENT);
+            }
 
-                    row.setBorder(
-                            new EmptyBorder(
-                                    3,
-                                    10,
-                                    3,
-                                    10
-                            )
-                    );
+            messageArea.add(bubble);
+            messageArea.add(Box.createVerticalStrut(3));
+            messageArea.add(lblTime);
 
+            JPanel side = new JPanel(new FlowLayout(mine ? FlowLayout.RIGHT : FlowLayout.LEFT, 8, 0));
+            side.setOpaque(false);
 
-                    // =====================================
-                    // BUBBLE
-                    // =====================================
-
-                    RoundedPanel bubble =
-                            new RoundedPanel(
-                                    22,
-
-                                    mine
-
-                                            ? new Color(
-                                            0,
-                                            132,
-                                            255
-                                    )
-
-                                            : new Color(
-                                            235,
-                                            235,
-                                            235
-                                    )
-                            );
-
-
-                    bubble.setLayout(
-                            new BorderLayout()
-                    );
-
-
-                    JLabel text =
-                            new JLabel(
-                                    "<html>"
-                                            + escapeHtml(
-                                            message
-                                    )
-                                            + "</html>"
-                            );
-
-
-                    text.setFont(
-                            new Font(
-                                    "Arial",
-                                    Font.PLAIN,
-                                    15
-                            )
-                    );
-
-
-                    text.setForeground(
-                            mine
-                                    ? Color.WHITE
-                                    : Color.BLACK
-                    );
-
-
-                    text.setBorder(
-                            new EmptyBorder(
-                                    9,
-                                    14,
-                                    9,
-                                    14
-                            )
-                    );
-
-
-                    bubble.add(
-                            text,
-                            BorderLayout.CENTER
-                    );
-
-
-                    // =====================================
-                    // TIME
-                    // =====================================
-
-                    JLabel lblTime =
-                            new JLabel(
-                                    LocalTime
-                                            .now()
-                                            .format(
-                                                    timeFormat
-                                            )
-                            );
-
-
-                    lblTime.setFont(
-                            new Font(
-                                    "Arial",
-                                    Font.PLAIN,
-                                    10
-                            )
-                    );
-
-
-                    lblTime.setForeground(
-                            Color.GRAY
-                    );
-
-
-                    // =====================================
-                    // MESSAGE + TIME
-                    // =====================================
-
-                    JPanel messageArea =
-                            new JPanel();
-
-
-                    messageArea.setLayout(
-                            new BoxLayout(
-                                    messageArea,
-                                    BoxLayout.Y_AXIS
-                            )
-                    );
-
-
-                    messageArea.setOpaque(
-                            false
-                    );
-
-
-                    if (mine) {
-
-                        bubble.setAlignmentX(
-                                Component.RIGHT_ALIGNMENT
-                        );
-
-
-                        lblTime.setAlignmentX(
-                                Component.RIGHT_ALIGNMENT
-                        );
-
-                    } else {
-
-                        bubble.setAlignmentX(
-                                Component.LEFT_ALIGNMENT
-                        );
-
-
-                        lblTime.setAlignmentX(
-                                Component.LEFT_ALIGNMENT
-                        );
+            if (!mine) {
+                JPanel otherAvatar = new JPanel() {
+                    @Override
+                    protected void paintComponent(Graphics g) {
+                        Graphics2D g2 = (Graphics2D) g.create();
+                        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                        g2.setColor(ThemeManager.getAccent());
+                        g2.fill(new Ellipse2D.Float(0, 0, 28, 28));
+                        g2.setColor(Color.WHITE);
+                        g2.setFont(new Font("Segoe UI", Font.BOLD, 12));
+                        String initial = conversationUser.isEmpty() ? "?" : conversationUser.substring(0, 1).toUpperCase();
+                        FontMetrics afm = g2.getFontMetrics();
+                        int tx = (28 - afm.stringWidth(initial)) / 2;
+                        int ty = ((28 - afm.getHeight()) / 2) + afm.getAscent();
+                        g2.drawString(initial, tx, ty);
+                        g2.dispose();
                     }
+                };
+                otherAvatar.setOpaque(false);
+                otherAvatar.setPreferredSize(new Dimension(28, 28));
+                side.add(otherAvatar);
+            }
 
+            side.add(messageArea);
+            row.add(side, mine ? BorderLayout.EAST : BorderLayout.WEST);
 
-                    messageArea.add(
-                            bubble
-                    );
+            Dimension preferred = row.getPreferredSize();
+            row.setMaximumSize(new Dimension(Integer.MAX_VALUE, preferred.height));
+            row.setAlignmentX(Component.LEFT_ALIGNMENT);
 
+            chatPanel.add(row);
+            chatPanel.add(Box.createVerticalStrut(4));
+            chatPanel.revalidate();
+            chatPanel.repaint();
 
-                    messageArea.add(
-                            Box.createVerticalStrut(
-                                    2
-                            )
-                    );
-
-
-                    messageArea.add(
-                            lblTime
-                    );
-
-
-                    // =====================================
-                    // CĂN TRÁI / PHẢI
-                    // =====================================
-
-                    JPanel side =
-                            new JPanel(
-                                    new FlowLayout(
-                                            mine
-                                                    ? FlowLayout.RIGHT
-                                                    : FlowLayout.LEFT,
-                                            0,
-                                            0
-                                    )
-                            );
-
-
-                    side.setOpaque(
-                            false
-                    );
-
-
-                    side.add(
-                            messageArea
-                    );
-
-
-                    row.add(
-                            side,
-
-                            mine
-                                    ? BorderLayout.EAST
-                                    : BorderLayout.WEST
-                    );
-
-
-                    // Không cho row giãn chiều cao
-                    Dimension preferred =
-                            row.getPreferredSize();
-
-
-                    row.setMaximumSize(
-                            new Dimension(
-                                    Integer.MAX_VALUE,
-                                    preferred.height
-                            )
-                    );
-
-
-                    row.setAlignmentX(
-                            Component.LEFT_ALIGNMENT
-                    );
-
-
-                    chatPanel.add(
-                            row
-                    );
-
-
-                    chatPanel.add(
-                            Box.createVerticalStrut(
-                                    3
-                            )
-                    );
-
-
-                    chatPanel.revalidate();
-
-                    chatPanel.repaint();
-
-
-                    if (conversationUser.equals(
-                            selectedUser
-                    )) {
-
-                        scrollToBottom();
-                    }
-                }
-        );
+            if (conversationUser.equals(selectedUser)) {
+                scrollToBottom();
+            }
+        });
     }
 
-
-    // =====================================================
-    // FILE CỦA MÌNH
-    // =====================================================
-
-    public void showMyFile(
-            String target,
-            String fileName) {
-
-        addMessage(
-                target,
-                "📎 " + fileName,
-                true
-        );
+    public void showMyFile(String target, String fileName) {
+        addMessage(target, "📎 File: " + fileName, true);
     }
 
-
-    // =====================================================
-    // FILE NGƯỜI KHÁC
-    // =====================================================
-
-    public void showFile(
-            String sender,
-            String fileName,
-            byte[] data) {
-
-        SwingUtilities.invokeLater(
-                () -> {
-
-                    JPanel chatPanel =
-                            getConversationPanel(
-                                    sender
-                            );
-
-
-                    JPanel row =
-                            new JPanel(
-                                    new BorderLayout()
-                            );
-
-
-                    row.setOpaque(
-                            false
-                    );
-
-
-                    row.setBorder(
-                            new EmptyBorder(
-                                    3,
-                                    10,
-                                    3,
-                                    10
-                            )
-                    );
-
-
-                    JPanel fileArea =
-                            new JPanel();
-
-
-                    fileArea.setLayout(
-                            new BoxLayout(
-                                    fileArea,
-                                    BoxLayout.Y_AXIS
-                            )
-                    );
-
-
-                    fileArea.setOpaque(
-                            false
-                    );
-
-
-                    RoundedPanel bubble =
-                            new RoundedPanel(
-                                    22,
-                                    new Color(
-                                            235,
-                                            235,
-                                            235
-                                    )
-                            );
-
-
-                    bubble.setLayout(
-                            new FlowLayout(
-                                    FlowLayout.LEFT,
-                                    8,
-                                    5
-                            )
-                    );
-
-
-                    JLabel label =
-                            new JLabel(
-                                    "📎 "
-                                            + fileName
-                            );
-
-
-                    JButton download =
-                            new JButton(
-                                    "Tải"
-                            );
-
-
-                    download.addActionListener(
-                            e ->
-                                    saveFile(
-                                            fileName,
-                                            data
-                                    )
-                    );
-
-
-                    bubble.add(
-                            label
-                    );
-
-
-                    bubble.add(
-                            download
-                    );
-
-
-                    bubble.setAlignmentX(
-                            Component.LEFT_ALIGNMENT
-                    );
-
-
-                    // TIME
-                    JLabel lblTime =
-                            new JLabel(
-                                    LocalTime
-                                            .now()
-                                            .format(
-                                                    timeFormat
-                                            )
-                            );
-
-
-                    lblTime.setFont(
-                            new Font(
-                                    "Arial",
-                                    Font.PLAIN,
-                                    10
-                            )
-                    );
-
-
-                    lblTime.setForeground(
-                            Color.GRAY
-                    );
-
-
-                    lblTime.setAlignmentX(
-                            Component.LEFT_ALIGNMENT
-                    );
-
-
-                    fileArea.add(
-                            bubble
-                    );
-
-
-                    fileArea.add(
-                            Box.createVerticalStrut(
-                                    2
-                            )
-                    );
-
-
-                    fileArea.add(
-                            lblTime
-                    );
-
-
-                    JPanel left =
-                            new JPanel(
-                                    new FlowLayout(
-                                            FlowLayout.LEFT,
-                                            0,
-                                            0
-                                    )
-                            );
-
-
-                    left.setOpaque(
-                            false
-                    );
-
-
-                    left.add(
-                            fileArea
-                    );
-
-
-                    row.add(
-                            left,
-                            BorderLayout.WEST
-                    );
-
-
-                    Dimension preferred =
-                            row.getPreferredSize();
-
-
-                    row.setMaximumSize(
-                            new Dimension(
-                                    Integer.MAX_VALUE,
-                                    preferred.height
-                            )
-                    );
-
-
-                    row.setAlignmentX(
-                            Component.LEFT_ALIGNMENT
-                    );
-
-
-                    chatPanel.add(
-                            row
-                    );
-
-
-                    chatPanel.add(
-                            Box.createVerticalStrut(
-                                    3
-                            )
-                    );
-
-
-                    chatPanel.revalidate();
-
-                    chatPanel.repaint();
-
-
-                    if (sender.equals(
-                            selectedUser
-                    )) {
-
-                        scrollToBottom();
-                    }
-                }
-        );
+    public void showFile(String sender, String fileName, byte[] data) {
+        SwingUtilities.invokeLater(() -> {
+            JPanel chatPanel = getConversationPanel(sender);
+
+            JPanel row = new JPanel(new BorderLayout());
+            row.setOpaque(false);
+            row.setBorder(new EmptyBorder(4, 0, 4, 0));
+
+            JPanel fileArea = new JPanel();
+            fileArea.setLayout(new BoxLayout(fileArea, BoxLayout.Y_AXIS));
+            fileArea.setOpaque(false);
+
+            RoundedPanel bubble = new RoundedPanel(16, ThemeManager.getOtherBubble());
+            bubble.setLayout(new FlowLayout(FlowLayout.LEFT, 10, 8));
+
+            JLabel label = new JLabel("📄 " + fileName);
+            label.setFont(new Font("Segoe UI", Font.BOLD, 13));
+            label.setForeground(ThemeManager.getTextPrimary());
+
+            JButton download = new JButton("Tải về");
+            download.setFont(new Font("Segoe UI", Font.BOLD, 12));
+            download.setForeground(Color.WHITE);
+            download.setBackground(ThemeManager.getAccent());
+            download.setFocusPainted(false);
+            download.setBorder(new EmptyBorder(6, 12, 6, 12));
+            download.setCursor(new Cursor(Cursor.HAND_CURSOR));
+            download.addActionListener(e -> saveFile(fileName, data));
+
+            bubble.add(label);
+            bubble.add(download);
+            bubble.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+            JLabel lblTime = new JLabel(LocalTime.now().format(timeFormat));
+            lblTime.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+            lblTime.setForeground(ThemeManager.getTextSecondary());
+            lblTime.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+            fileArea.add(bubble);
+            fileArea.add(Box.createVerticalStrut(3));
+            fileArea.add(lblTime);
+
+            JPanel left = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+            left.setOpaque(false);
+            left.add(fileArea);
+
+            row.add(left, BorderLayout.WEST);
+
+            Dimension preferred = row.getPreferredSize();
+            row.setMaximumSize(new Dimension(Integer.MAX_VALUE, preferred.height));
+            row.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+            chatPanel.add(row);
+            chatPanel.add(Box.createVerticalStrut(4));
+            chatPanel.revalidate();
+            chatPanel.repaint();
+
+            if (sender.equals(selectedUser)) {
+                scrollToBottom();
+            }
+        });
     }
 
-
-    // =====================================================
-    // SAVE FILE
-    // =====================================================
-
-    private void saveFile(
-            String fileName,
-            byte[] data) {
-
-        JFileChooser chooser =
-                new JFileChooser();
-
-
-        chooser.setSelectedFile(
-                new File(
-                        fileName
-                )
-        );
-
-
-        if (chooser.showSaveDialog(
-                this
-        ) == JFileChooser.APPROVE_OPTION) {
-
+    private void saveFile(String fileName, byte[] data) {
+        JFileChooser chooser = new JFileChooser();
+        chooser.setSelectedFile(new File(fileName));
+        if (chooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
             try {
-
-                Files.write(
-                        chooser
-                                .getSelectedFile()
-                                .toPath(),
-                        data
-                );
-
-
-                JOptionPane.showMessageDialog(
-                        this,
-                        "Đã lưu file!"
-                );
-
+                Files.write(chooser.getSelectedFile().toPath(), data);
+                JOptionPane.showMessageDialog(this, "Đã lưu file thành công!", "Thông báo", JOptionPane.INFORMATION_MESSAGE);
             } catch (IOException e) {
-
-                JOptionPane.showMessageDialog(
-                        this,
-                        "Không lưu được file!"
-                );
+                JOptionPane.showMessageDialog(this, "Lỗi khi lưu file!", "Lỗi", JOptionPane.ERROR_MESSAGE);
             }
         }
     }
-
-
-    // =====================================================
-    // ICON
-    // =====================================================
-
-    private JButton createIconButton(
-            String path,
-            String tooltip) {
-
-        JButton button =
-                new JButton();
-
-
-        ImageIcon icon =
-                loadIcon(
-                        path,
-                        28,
-                        28
-                );
-
-
-        if (icon != null) {
-
-            button.setIcon(
-                    icon
-            );
-
-        } else {
-
-            button.setText(
-                    tooltip
-            );
-        }
-
-
-        button.setToolTipText(
-                tooltip
-        );
-
-
-        button.setBorderPainted(
-                false
-        );
-
-
-        button.setContentAreaFilled(
-                false
-        );
-
-
-        button.setFocusPainted(
-                false
-        );
-
-
-        button.setOpaque(
-                false
-        );
-
-
-        button.setCursor(
-                new Cursor(
-                        Cursor.HAND_CURSOR
-                )
-        );
-
-
-        button.setPreferredSize(
-                new Dimension(
-                        42,
-                        42
-                )
-        );
-
-
-        return button;
-    }
-
-
-    // =====================================================
-    // LOAD ICON
-    // =====================================================
-
-    private ImageIcon loadIcon(
-            String path,
-            int width,
-            int height) {
-
-        ImageIcon original;
-
-
-        java.net.URL url =
-                getClass()
-                        .getResource(
-                                path
-                        );
-
-
-        if (url != null) {
-
-            original =
-                    new ImageIcon(
-                            url
-                    );
-
-        } else {
-
-            original =
-                    new ImageIcon(
-                            "resources"
-                                    + path
-                    );
-        }
-
-
-        if (original.getIconWidth()
-                <= 0) {
-
-            return null;
-        }
-
-
-        Image scaled =
-                original
-                        .getImage()
-                        .getScaledInstance(
-                                width,
-                                height,
-                                Image.SCALE_SMOOTH
-                        );
-
-
-        return new ImageIcon(
-                scaled
-        );
-    }
-
-
-    // =====================================================
-    // SCROLL
-    // =====================================================
 
     private void scrollToBottom() {
-
-        SwingUtilities.invokeLater(
-                () -> {
-
-                    JScrollBar bar =
-                            chatScrollPane
-                                    .getVerticalScrollBar();
-
-
-                    bar.setValue(
-                            bar.getMaximum()
-                    );
-                }
-        );
+        SwingUtilities.invokeLater(() -> {
+            JScrollBar bar = chatScrollPane.getVerticalScrollBar();
+            bar.setValue(bar.getMaximum());
+        });
     }
 
-
-    // =====================================================
-    // ESCAPE HTML
-    // =====================================================
-
-    private String escapeHtml(
-            String text) {
-
-        return text
-                .replace(
-                        "&",
-                        "&amp;"
-                )
-                .replace(
-                        "<",
-                        "&lt;"
-                )
-                .replace(
-                        ">",
-                        "&gt;"
-                );
+    private String escapeHtml(String text) {
+        return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 
+    private void applyTheme() {
+        setBackground(ThemeManager.getChatBg());
+        headerPanel.setBackground(ThemeManager.getHeaderBg());
+        headerPanel.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(0, 0, 1, 0, ThemeManager.getBorderColor()),
+                new EmptyBorder(10, 20, 10, 20)
+        ));
 
-    // =====================================================
-    // BUBBLE
-    // =====================================================
+        lblChatTitle.setForeground(ThemeManager.getTextPrimary());
+        lblSubStatus.setForeground(ThemeManager.getTextSecondary());
+        lblEmpty.setForeground(ThemeManager.getTextSecondary());
 
-    private static class RoundedPanel
-            extends JPanel {
+        emptyChatPanel.setBackground(ThemeManager.getChatBg());
+        if (chatScrollPane != null) {
+            chatScrollPane.setBackground(ThemeManager.getChatBg());
+            chatScrollPane.getViewport().setBackground(ThemeManager.getChatBg());
+        }
 
+        bottomContainer.setBackground(ThemeManager.getHeaderBg());
+        bottomContainer.setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, ThemeManager.getBorderColor()));
+        bottomInputRow.setBackground(ThemeManager.getHeaderBg());
+
+        if (txtMessage != null) {
+            txtMessage.repaint();
+        }
+
+        btnFile.setIcon(UIIcons.createAttachIcon(24, ThemeManager.getAccent()));
+        btnSend.setIcon(UIIcons.createSendIcon(24, ThemeManager.getAccent()));
+
+        for (JPanel panel : conversations.values()) {
+            panel.setBackground(ThemeManager.getChatBg());
+        }
+        revalidate();
+        repaint();
+    }
+
+    private static class RoundedPanel extends JPanel {
         private final int radius;
-
         private final Color color;
 
-
-        public RoundedPanel(
-                int radius,
-                Color color) {
-
-            this.radius =
-                    radius;
-
-            this.color =
-                    color;
-
-
-            setOpaque(
-                    false
-            );
+        public RoundedPanel(int radius, Color color) {
+            this.radius = radius;
+            this.color = color;
+            setOpaque(false);
         }
 
-
         @Override
-        protected void paintComponent(
-                Graphics g) {
-
-            Graphics2D g2 =
-                    (Graphics2D)
-                            g.create();
-
-
-            g2.setRenderingHint(
-                    RenderingHints.KEY_ANTIALIASING,
-                    RenderingHints.VALUE_ANTIALIAS_ON
-            );
-
-
-            g2.setColor(
-                    color
-            );
-
-
-            g2.fillRoundRect(
-                    0,
-                    0,
-                    getWidth(),
-                    getHeight(),
-                    radius,
-                    radius
-            );
-
-
+        protected void paintComponent(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setColor(color);
+            g2.fill(new RoundRectangle2D.Float(0, 0, getWidth(), getHeight(), radius, radius));
             g2.dispose();
-
-
-            super.paintComponent(
-                    g
-            );
+            super.paintComponent(g);
         }
     }
 
-
-    // =====================================================
-    // INPUT BO TRÒN
-    // =====================================================
-
-    private static class RoundedTextField
-            extends JTextField {
-
-        private final int radius;
-
+    private static class DarkRoundedTextField extends JTextField {
         private final String placeholder;
 
-
-        public RoundedTextField(
-                int radius,
-                String placeholder) {
-
-            this.radius =
-                    radius;
-
-            this.placeholder =
-                    placeholder;
-
-
-            setOpaque(
-                    false
-            );
+        public DarkRoundedTextField(String placeholder) {
+            this.placeholder = placeholder;
+            setOpaque(false);
+            setFont(new Font("Segoe UI", Font.PLAIN, 14));
+            setBorder(new EmptyBorder(10, 16, 10, 16));
+            setPreferredSize(new Dimension(100, 40));
         }
 
-
         @Override
-        protected void paintComponent(
-                Graphics g) {
-
-            Graphics2D g2 =
-                    (Graphics2D)
-                            g.create();
-
-
-            g2.setRenderingHint(
-                    RenderingHints.KEY_ANTIALIASING,
-                    RenderingHints.VALUE_ANTIALIAS_ON
-            );
-
-
-            g2.setColor(
-                    new Color(
-                            245,
-                            245,
-                            245
-                    )
-            );
-
-
-            g2.fillRoundRect(
-                    0,
-                    0,
-                    getWidth(),
-                    getHeight(),
-                    radius,
-                    radius
-            );
-
-
+        protected void paintComponent(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setColor(ThemeManager.getInputBg());
+            g2.fill(new RoundRectangle2D.Float(0, 0, getWidth(), getHeight(), 20, 20));
             g2.dispose();
 
+            setForeground(ThemeManager.getTextPrimary());
+            setCaretColor(ThemeManager.getTextPrimary());
 
-            super.paintComponent(
-                    g
-            );
+            super.paintComponent(g);
 
-
-            // =========================================
-            // PLACEHOLDER
-            // =========================================
-
-            if (getText().isEmpty()
-                    && !isFocusOwner()) {
-
-                Graphics2D textGraphics =
-                        (Graphics2D)
-                                g.create();
-
-
-                textGraphics.setColor(
-                        Color.GRAY
-                );
-
-
-                textGraphics.setFont(
-                        getFont()
-                );
-
-
-                FontMetrics fm =
-                        textGraphics
-                                .getFontMetrics();
-
-
-                int y =
-                        (
-                                getHeight()
-                                        + fm.getAscent()
-                                        - fm.getDescent()
-                        )
-                                / 2;
-
-
-                textGraphics.drawString(
-                        placeholder,
-                        16,
-                        y
-                );
-
-
-                textGraphics.dispose();
+            if (getText().isEmpty() && !isFocusOwner()) {
+                Graphics2D tg = (Graphics2D) g.create();
+                tg.setColor(ThemeManager.getTextSecondary());
+                tg.setFont(getFont());
+                FontMetrics fm = tg.getFontMetrics();
+                int y = (getHeight() + fm.getAscent() - fm.getDescent()) / 2;
+                tg.drawString(placeholder, 16, y);
+                tg.dispose();
             }
-        }
-
-
-        @Override
-        protected void paintBorder(
-                Graphics g) {
-
-            Graphics2D g2 =
-                    (Graphics2D)
-                            g.create();
-
-
-            g2.setRenderingHint(
-                    RenderingHints.KEY_ANTIALIASING,
-                    RenderingHints.VALUE_ANTIALIAS_ON
-            );
-
-
-            g2.setColor(
-                    new Color(
-                            220,
-                            220,
-                            220
-                    )
-            );
-
-
-            g2.drawRoundRect(
-                    0,
-                    0,
-                    getWidth() - 1,
-                    getHeight() - 1,
-                    radius,
-                    radius
-            );
-
-
-            g2.dispose();
         }
     }
 }

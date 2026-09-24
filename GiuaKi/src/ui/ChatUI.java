@@ -3,354 +3,115 @@ package ui;
 import client.TCPClient;
 
 import javax.swing.*;
-
 import java.awt.*;
-
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
-
 import java.io.File;
-
 import java.util.List;
-
 
 public class ChatUI extends JFrame {
 
     private final TCPClient controller;
-
-
     private final String username;
-
     private final String serverIP;
-
-
     private final OnlinePanel onlinePanel;
-
     private final ChatPanel chatPanel;
 
+    public ChatUI(TCPClient controller) {
+        this.controller = controller;
 
-    // =====================================================
-    // CONSTRUCTOR
-    // =====================================================
-
-    public ChatUI(
-            TCPClient controller) {
-
-        this.controller =
-                controller;
-
-
-        // =========================================
-        // LOGIN
-        // =========================================
-
-        LoginDialog loginDialog =
-                new LoginDialog();
-
-
-        boolean accepted =
-                loginDialog.showDialog(
-                        null
-                );
-
+        // Login Dialog
+        LoginDialog loginDialog = new LoginDialog();
+        boolean accepted = loginDialog.showDialog(null);
 
         if (!accepted) {
-
-            System.exit(
-                    0
-            );
+            System.exit(0);
         }
 
+        username = loginDialog.getUsername();
+        serverIP = loginDialog.getServerIP();
 
-        username =
-                loginDialog.getUsername();
+        // Frame setup
+        setTitle("Messenger - " + username);
+        setSize(960, 640);
+        setLocationRelativeTo(null);
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setLayout(new BorderLayout());
 
+        getContentPane().setBackground(ThemeManager.getAppBg());
+        ThemeManager.addThemeChangeListener(() -> {
+            getContentPane().setBackground(ThemeManager.getAppBg());
+            repaint();
+        });
 
-        serverIP =
-                loginDialog.getServerIP();
+        // Online & Chat Panels
+        onlinePanel = new OnlinePanel(username);
+        chatPanel = new ChatPanel(controller);
 
+        onlinePanel.setUserSelectedListener(chatPanel::openConversation);
 
-        // =========================================
-        // FRAME
-        // =========================================
+        add(onlinePanel, BorderLayout.WEST);
+        add(chatPanel, BorderLayout.CENTER);
 
-        setTitle(
-                "Messenger - "
-                        + username
-        );
+        addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosing(WindowEvent e) {
+                controller.closeConnection();
+            }
+        });
 
-
-        setSize(
-                900,
-                620
-        );
-
-
-        setLocationRelativeTo(
-                null
-        );
-
-
-        setDefaultCloseOperation(
-                JFrame.EXIT_ON_CLOSE
-        );
-
-
-        setLayout(
-                new BorderLayout()
-        );
-
-
-        // =========================================
-        // ONLINE
-        // =========================================
-
-        onlinePanel =
-                new OnlinePanel(
-                        username
-                );
-
-
-        // =========================================
-        // CHAT
-        // =========================================
-
-        chatPanel =
-                new ChatPanel(
-                        controller
-                );
-
-
-        onlinePanel.setUserSelectedListener(
-                chatPanel::openConversation
-        );
-
-
-        add(
-                onlinePanel,
-                BorderLayout.WEST
-        );
-
-
-        add(
-                chatPanel,
-                BorderLayout.CENTER
-        );
-
-
-        // =========================================
-        // CLOSE
-        // =========================================
-
-        addWindowListener(
-                new WindowAdapter() {
-
-                    @Override
-                    public void windowClosing(
-                            WindowEvent e) {
-
-                        controller.closeConnection();
-                    }
-                }
-        );
-
-
-        setVisible(
-                true
-        );
+        setVisible(true);
     }
 
+    public void updateOnlineUsers(List<String> users) {
+        SwingUtilities.invokeLater(() -> {
+            String current = chatPanel.getSelectedUser();
+            onlinePanel.updateUsers(users);
 
-    // =====================================================
-    // ONLINE USERS
-    // =====================================================
+            if (current == null) return;
 
-    public void updateOnlineUsers(
-            List<String> users) {
-
-        SwingUtilities.invokeLater(
-                () -> {
-
-                    String current =
-                            chatPanel
-                                    .getSelectedUser();
-
-
-                    onlinePanel.updateUsers(
-                            users
-                    );
-
-
-                    if (current == null) {
-
-                        return;
-                    }
-
-
-                    if (users.contains(
-                            current
-                    )) {
-
-                        onlinePanel.selectUser(
-                                current
-                        );
-
-                    } else {
-
-                        onlinePanel.clearSelection();
-
-                        chatPanel.closeConversation();
-                    }
-                }
-        );
+            if (users.contains(current)) {
+                onlinePanel.selectUser(current);
+            } else {
+                onlinePanel.clearSelection();
+                chatPanel.closeConversation();
+            }
+        });
     }
 
-
-    // =====================================================
-    // TYPING
-    // =====================================================
-
-    public void showTyping(
-            String sender,
-            boolean typing) {
-
-        chatPanel.showTyping(
-                sender,
-                typing
-        );
+    public void showTyping(String sender, boolean typing) {
+        chatPanel.showTyping(sender, typing);
     }
 
+    public String getUsername() { return username; }
+    public String getServerIP() { return serverIP; }
+    public String getSelectedUser() { return chatPanel.getSelectedUser(); }
+    public String getMessage() { return chatPanel.getMessage(); }
+    public void clearMessage() { chatPanel.clearMessage(); }
+    public File chooseFile() { return chatPanel.chooseFile(); }
 
-    // =====================================================
-    // GET
-    // =====================================================
-
-    public String getUsername() {
-
-        return username;
+    public void showMyMessage(String target, String message) {
+        chatPanel.showMyMessage(target, message);
     }
 
-
-    public String getServerIP() {
-
-        return serverIP;
+    public void showOtherMessage(String sender, String message) {
+        chatPanel.showTyping(sender, false);
+        chatPanel.showOtherMessage(sender, message);
     }
 
-
-    public String getSelectedUser() {
-
-        return chatPanel
-                .getSelectedUser();
+    public void showMyFile(String target, String fileName) {
+        chatPanel.showMyFile(target, fileName);
     }
 
-
-    public String getMessage() {
-
-        return chatPanel
-                .getMessage();
+    public void showFile(String sender, String fileName, byte[] data) {
+        chatPanel.showFile(sender, fileName, data);
     }
 
-
-    public void clearMessage() {
-
-        chatPanel.clearMessage();
+    public void showError(String message) {
+        SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(this, message));
     }
-
-
-    // =====================================================
-    // FILE
-    // =====================================================
-
-    public File chooseFile() {
-
-        return chatPanel
-                .chooseFile();
-    }
-
-
-    // =====================================================
-    // MESSAGE
-    // =====================================================
-
-    public void showMyMessage(
-            String target,
-            String message) {
-
-        chatPanel.showMyMessage(
-                target,
-                message
-        );
-    }
-
-
-    public void showOtherMessage(
-            String sender,
-            String message) {
-
-        // Có tin nhắn đến
-        // thì ẩn trạng thái đang soạn
-        chatPanel.showTyping(
-                sender,
-                false
-        );
-
-
-        chatPanel.showOtherMessage(
-                sender,
-                message
-        );
-    }
-
-
-    // =====================================================
-    // FILE
-    // =====================================================
-
-    public void showMyFile(
-            String target,
-            String fileName) {
-
-        chatPanel.showMyFile(
-                target,
-                fileName
-        );
-    }
-
-
-    public void showFile(
-            String sender,
-            String fileName,
-            byte[] data) {
-
-        chatPanel.showFile(
-                sender,
-                fileName,
-                data
-        );
-    }
-
-
-    // =====================================================
-    // ERROR
-    // =====================================================
-
-    public void showError(
-            String message) {
-
-        SwingUtilities.invokeLater(
-                () ->
-                        JOptionPane.showMessageDialog(
-                                this,
-                                message
-                        )
-        );
-    }
-
 
     public void showDisconnected() {
-
-        showError(
-                "Mất kết nối với Server!"
-        );
+        showError("Mất kết nối với Server!");
     }
 }
