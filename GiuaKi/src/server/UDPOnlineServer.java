@@ -29,9 +29,7 @@ public class UDPOnlineServer {
     private final TypingService typingService;
 
 
-    // =====================================================
-    // CONSTRUCTOR
-    // =====================================================
+
 
     public UDPOnlineServer(
             int port) {
@@ -51,7 +49,7 @@ public class UDPOnlineServer {
     // START UDP SERVER
     // =====================================================
 
-    public void start() {
+    public void start() { //dòng thể hiện rõ nhất chương trình đang dùng UDP
 
         try {
 
